@@ -1,5 +1,5 @@
 # lovewlever.github.io
 
-[Main](https://lovewlever.github.io/)
+- [Main](https://lovewlever.github.io/)
 
-[Picture](https://lovewlever.github.io/picture.html#/)
+- [Picture](https://lovewlever.github.io/picture.html#/)

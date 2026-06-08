@@ -354,6 +354,37 @@
             10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
             20%, 40%, 60%, 80% { transform: translateX(5px); }
         }
+
+        /* Format switcher tabs */
+        .format-tabs {
+            display: flex;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 4px;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            margin-bottom: 1.5rem;
+        }
+        .format-tab {
+            flex: 1;
+            text-align: center;
+            padding: 0.6rem 1rem;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            user-select: none;
+        }
+        .format-tab:hover {
+            color: var(--text-primary);
+            background: rgba(255, 255, 255, 0.02);
+        }
+        .format-tab.active {
+            background: var(--accent-primary);
+            color: var(--text-primary);
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+        }
     </style>
 </head>
 <body>
@@ -402,9 +433,16 @@
                     </button>
                 </div>
 
-                <!-- Signature MD5 (Colons) -->
+                <!-- Format Toggle Tabs -->
+                <div class="format-tabs" id="formatTabs">
+                    <div class="format-tab active" data-format="colon">标准冒号 (Colons)</div>
+                    <div class="format-tab" data-format="space">空格分隔 (Spaces)</div>
+                    <div class="format-tab" data-format="plain">无冒号小写 (Plain)</div>
+                </div>
+
+                <!-- Signature MD5 -->
                 <div class="result-group">
-                    <div class="result-label">证书 MD5 (标准冒号)</div>
+                    <div class="result-label">证书 MD5</div>
                     <div class="result-value-wrapper" id="md5Val"></div>
                     <div class="copied-tooltip" id="tip-md5">已复制!</div>
                     <button class="btn-copy" onclick="copyText('md5Val', 'tip-md5')" title="复制">
@@ -412,22 +450,22 @@
                     </button>
                 </div>
 
-                <!-- Signature MD5 (Spaces) -->
+                <!-- Signature SHA1 -->
                 <div class="result-group">
-                    <div class="result-label">证书 MD5 (空格分隔)</div>
-                    <div class="result-value-wrapper" id="md5SpaceVal"></div>
-                    <div class="copied-tooltip" id="tip-md5Space">已复制!</div>
-                    <button class="btn-copy" onclick="copyText('md5SpaceVal', 'tip-md5Space')" title="复制">
+                    <div class="result-label">证书 SHA1</div>
+                    <div class="result-value-wrapper" id="sha1Val"></div>
+                    <div class="copied-tooltip" id="tip-sha1">已复制!</div>
+                    <button class="btn-copy" onclick="copyText('sha1Val', 'tip-sha1')" title="复制">
                         <svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
                     </button>
                 </div>
 
-                <!-- Signature MD5 (Plain Lower) -->
+                <!-- Signature SHA256 -->
                 <div class="result-group">
-                    <div class="result-label">证书 MD5 (无冒号小写)</div>
-                    <div class="result-value-wrapper" id="md5PlainLowerVal"></div>
-                    <div class="copied-tooltip" id="tip-md5PlainLower">已复制!</div>
-                    <button class="btn-copy" onclick="copyText('md5PlainLowerVal', 'tip-md5PlainLower')" title="复制">
+                    <div class="result-label">证书 SHA256</div>
+                    <div class="result-value-wrapper" id="sha256Val"></div>
+                    <div class="copied-tooltip" id="tip-sha256">已复制!</div>
+                    <button class="btn-copy" onclick="copyText('sha256Val', 'tip-sha256')" title="复制">
                         <svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
                     </button>
                 </div>
@@ -583,10 +621,9 @@
                 }
 
                 // Show results
+                window.currentCertInfo = certInfo;
                 document.getElementById('pkgNameVal').innerText = packageName;
-                document.getElementById('md5Val').innerText = certInfo.md5;
-                document.getElementById('md5SpaceVal').innerText = certInfo.md5Space;
-                document.getElementById('md5PlainLowerVal').innerText = certInfo.md5PlainLower;
+                updateHashDisplay();
                 document.getElementById('modHexUpperVal').innerText = certInfo.modulusHexUpper;
                 document.getElementById('modHexLowerVal').innerText = certInfo.modulusHexLower;
                 document.getElementById('modDecVal').innerText = certInfo.modulusDec;
@@ -648,6 +685,22 @@
             const md5Space = hexMd5.match(/.{2}/g).join(' ').toUpperCase();
             const md5PlainLower = hexMd5.toLowerCase();
 
+            // Compute SHA1 formats
+            const sha1Hasher = forge.md.sha1.create();
+            sha1Hasher.update(derStr);
+            const hexSha1 = sha1Hasher.digest().toHex();
+            const sha1Formatted = hexSha1.match(/.{2}/g).join(':').toUpperCase();
+            const sha1Space = hexSha1.match(/.{2}/g).join(' ').toUpperCase();
+            const sha1PlainLower = hexSha1.toLowerCase();
+
+            // Compute SHA256 formats
+            const sha256Hasher = forge.md.sha256.create();
+            sha256Hasher.update(derStr);
+            const hexSha256 = sha256Hasher.digest().toHex();
+            const sha256Formatted = hexSha256.match(/.{2}/g).join(':').toUpperCase();
+            const sha256Space = hexSha256.match(/.{2}/g).join(' ').toUpperCase();
+            const sha256PlainLower = hexSha256.toLowerCase();
+
             // Extract RSA modulus
             if (!cert.publicKey || !cert.publicKey.n) {
                 throw new Error("证书不包含有效的 RSA 公钥，无法提取模数。");
@@ -662,6 +715,12 @@
                 md5: md5Formatted,
                 md5Space: md5Space,
                 md5PlainLower: md5PlainLower,
+                sha1: sha1Formatted,
+                sha1Space: sha1Space,
+                sha1PlainLower: sha1PlainLower,
+                sha256: sha256Formatted,
+                sha256Space: sha256Space,
+                sha256PlainLower: sha256PlainLower,
                 modulusHexUpper: hexUpper,
                 modulusHexLower: hexLower,
                 modulusDec: decStr
@@ -899,6 +958,38 @@
         function hideResults() {
             resultsContainer.style.display = 'none';
         }
+
+        // Update hash values according to active format tab
+        function updateHashDisplay() {
+            const certInfo = window.currentCertInfo;
+            if (!certInfo) return;
+            
+            const activeTab = document.querySelector('.format-tab.active');
+            const format = activeTab ? activeTab.getAttribute('data-format') : 'colon';
+            
+            if (format === 'colon') {
+                document.getElementById('md5Val').innerText = certInfo.md5;
+                document.getElementById('sha1Val').innerText = certInfo.sha1;
+                document.getElementById('sha256Val').innerText = certInfo.sha256;
+            } else if (format === 'space') {
+                document.getElementById('md5Val').innerText = certInfo.md5Space;
+                document.getElementById('sha1Val').innerText = certInfo.sha1Space;
+                document.getElementById('sha256Val').innerText = certInfo.sha256Space;
+            } else if (format === 'plain') {
+                document.getElementById('md5Val').innerText = certInfo.md5PlainLower;
+                document.getElementById('sha1Val').innerText = certInfo.sha1PlainLower;
+                document.getElementById('sha256Val').innerText = certInfo.sha256PlainLower;
+            }
+        }
+
+        // Add format tab event listeners
+        document.querySelectorAll('.format-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.format-tab').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                updateHashDisplay();
+            });
+        });
     </script>
 </body>
 </html>

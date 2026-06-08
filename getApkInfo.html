@@ -1,0 +1,904 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Android APK 属性提取工具</title>
+    <!-- Google Fonts: Outfit -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- JSZip for V1 ZIP extraction -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <!-- Forge for PKCS7 & ASN.1 parse -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/forge/1.3.1/forge.min.js"></script>
+    
+    <style>
+        :root {
+            --bg-color: #0b0f19;
+            --card-bg: rgba(17, 24, 39, 0.7);
+            --card-border: rgba(255, 255, 255, 0.08);
+            --text-primary: #f3f4f6;
+            --text-secondary: #9ca3af;
+            --accent-primary: #4f46e5;
+            --accent-secondary: #06b6d4;
+            --glow-color: rgba(99, 102, 241, 0.15);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem 1rem;
+            overflow-x: hidden;
+            background-image: 
+                radial-gradient(circle at 10% 20%, rgba(99, 102, 241, 0.08) 0%, transparent 40%),
+                radial-gradient(circle at 90% 80%, rgba(6, 182, 212, 0.08) 0%, transparent 40%);
+        }
+
+        .container {
+            width: 100%;
+            max-width: 800px;
+            z-index: 10;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 2.5rem;
+            animation: fadeInDown 0.8s ease-out;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            background: linear-gradient(to right, #a5b4fc, #818cf8, #67e8f9);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 0.5rem;
+            letter-spacing: -0.025em;
+        }
+
+        header p {
+            color: var(--text-secondary);
+            font-size: 1.1rem;
+            font-weight: 300;
+        }
+
+        /* Card panels with Glassmorphism */
+        .card {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 24px;
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            padding: 2rem;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+            margin-bottom: 2rem;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            border-radius: 24px;
+            padding: 1px;
+            background: linear-gradient(to bottom right, rgba(255,255,255,0.1), transparent, rgba(255,255,255,0.05));
+            -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            -webkit-mask-composite: xor;
+            mask-composite: exclude;
+            pointer-events: none;
+        }
+
+        /* Drag and Drop Zone */
+        .dropzone {
+            border: 2px dashed rgba(99, 102, 241, 0.4);
+            border-radius: 16px;
+            padding: 3rem 2rem;
+            text-align: center;
+            cursor: pointer;
+            background: rgba(99, 102, 241, 0.02);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .dropzone:hover, .dropzone.dragover {
+            border-color: var(--accent-secondary);
+            background: rgba(6, 182, 212, 0.05);
+            box-shadow: 0 0 30px var(--glow-color);
+            transform: scale(1.01);
+        }
+
+        .dropzone input {
+            display: none;
+        }
+
+        .dropzone-icon {
+            font-size: 3.5rem;
+            margin-bottom: 1rem;
+            display: inline-block;
+            transition: transform 0.3s ease;
+            background: linear-gradient(135deg, #a5b4fc, #67e8f9);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .dropzone:hover .dropzone-icon {
+            transform: translateY(-5px) scale(1.05);
+        }
+
+        .dropzone h3 {
+            font-size: 1.25rem;
+            font-weight: 500;
+            margin-bottom: 0.5rem;
+        }
+
+        .dropzone p {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            font-weight: 300;
+        }
+
+        /* Loading Spinner */
+        .loading-container {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem 0;
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 3px solid rgba(99, 102, 241, 0.1);
+            border-radius: 50%;
+            border-top-color: var(--accent-secondary);
+            animation: spin 1s linear infinite;
+            margin-bottom: 1rem;
+        }
+
+        .loading-text {
+            font-size: 1rem;
+            color: var(--text-secondary);
+            animation: pulse 1.5s infinite ease-in-out;
+        }
+
+        /* Error Message Alert */
+        .error-alert {
+            display: none;
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.2);
+            color: #fca5a5;
+            padding: 1rem;
+            border-radius: 12px;
+            margin-bottom: 1.5rem;
+            font-size: 0.95rem;
+            animation: shake 0.5s ease-in-out;
+        }
+
+        /* Results Panel */
+        .results-container {
+            display: none;
+            animation: fadeInUp 0.6s ease-out;
+        }
+
+        .result-group {
+            margin-bottom: 1.5rem;
+            position: relative;
+        }
+
+        .result-label {
+            font-size: 0.85rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-secondary);
+            margin-bottom: 0.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .result-value-wrapper {
+            position: relative;
+            background: rgba(0, 0, 0, 0.25);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 1rem;
+            padding-right: 3.5rem;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.95rem;
+            word-break: break-all;
+            line-height: 1.5;
+            color: #cbd5e1;
+            transition: all 0.2s ease;
+        }
+
+        .result-value-wrapper:hover {
+            border-color: rgba(255, 255, 255, 0.15);
+            box-shadow: inset 0 2px 8px rgba(0,0,0,0.2);
+        }
+
+        .result-value-wrapper.modulus-box {
+            max-height: 150px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+
+        /* Copy Button */
+        .btn-copy {
+            position: absolute;
+            right: 0.75rem;
+            top: 50%;
+            transform: translateY(-50%);
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: var(--text-primary);
+            width: 2.2rem;
+            height: 2.2rem;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .btn-copy:hover {
+            background: var(--accent-primary);
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 10px rgba(99, 102, 241, 0.5);
+            transform: translateY(-50%) scale(1.05);
+        }
+
+        .btn-copy svg {
+            width: 16px;
+            height: 16px;
+            fill: currentColor;
+        }
+
+        .copied-tooltip {
+            position: absolute;
+            right: 3.5rem;
+            top: 50%;
+            transform: translateY(-50%);
+            background: var(--accent-secondary);
+            color: var(--bg-color);
+            padding: 0.25rem 0.6rem;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+        }
+
+        .copied-tooltip.show {
+            opacity: 1;
+        }
+
+        footer {
+            text-align: center;
+            color: rgba(255, 255, 255, 0.2);
+            font-size: 0.8rem;
+            margin-top: 1rem;
+            font-weight: 300;
+        }
+
+        /* Scrollbar styles for modulus boxes */
+        .result-value-wrapper::-webkit-scrollbar {
+            width: 8px;
+        }
+        .result-value-wrapper::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.1);
+            border-radius: 0 12px 12px 0;
+        }
+        .result-value-wrapper::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+        }
+        .result-value-wrapper::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        /* Animations */
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 0.6; }
+            50% { opacity: 1; }
+        }
+
+        @keyframes fadeInDown {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+            20%, 40%, 60%, 80% { transform: translateX(5px); }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <header>
+            <h1>Android APK 属性提取工具</h1>
+            <p>100% 浏览器本地解析包名、签名 MD5 和公钥模数</p>
+        </header>
+
+        <div class="card">
+            <!-- Dropzone Area -->
+            <div class="dropzone" id="dropzone">
+                <input type="file" id="fileInput" accept=".apk">
+                <span class="dropzone-icon">📥</span>
+                <h3>拖拽 APK 文件到此处</h3>
+                <p>或者点击区域选择本地文件进行解析</p>
+            </div>
+
+            <!-- Loading Spinner Area -->
+            <div class="loading-container" id="loadingContainer">
+                <div class="spinner"></div>
+                <div class="loading-text" id="loadingText">正在读取 APK 文件结构...</div>
+            </div>
+
+            <!-- Error Notification -->
+            <div class="error-alert" id="errorAlert">
+                解析失败，请确保您上传的是有效的 Android APK 安装包文件。
+            </div>
+        </div>
+
+        <!-- Output Area -->
+        <div class="results-container" id="resultsContainer">
+            <div class="card">
+                <h2 style="font-size: 1.25rem; font-weight: 600; margin-bottom: 1.5rem; color: #a5b4fc; display: flex; align-items: center; gap: 8px;">
+                    📊 提取属性结果
+                </h2>
+
+                <!-- Package Name -->
+                <div class="result-group">
+                    <div class="result-label">应用包名 (Package Name)</div>
+                    <div class="result-value-wrapper" id="pkgNameVal"></div>
+                    <div class="copied-tooltip" id="tip-pkg">已复制!</div>
+                    <button class="btn-copy" onclick="copyText('pkgNameVal', 'tip-pkg')" title="复制">
+                        <svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+                    </button>
+                </div>
+
+                <!-- Signature MD5 (Colons) -->
+                <div class="result-group">
+                    <div class="result-label">证书 MD5 (标准冒号)</div>
+                    <div class="result-value-wrapper" id="md5Val"></div>
+                    <div class="copied-tooltip" id="tip-md5">已复制!</div>
+                    <button class="btn-copy" onclick="copyText('md5Val', 'tip-md5')" title="复制">
+                        <svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+                    </button>
+                </div>
+
+                <!-- Signature MD5 (Spaces) -->
+                <div class="result-group">
+                    <div class="result-label">证书 MD5 (空格分隔)</div>
+                    <div class="result-value-wrapper" id="md5SpaceVal"></div>
+                    <div class="copied-tooltip" id="tip-md5Space">已复制!</div>
+                    <button class="btn-copy" onclick="copyText('md5SpaceVal', 'tip-md5Space')" title="复制">
+                        <svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+                    </button>
+                </div>
+
+                <!-- Signature MD5 (Plain Lower) -->
+                <div class="result-group">
+                    <div class="result-label">证书 MD5 (无冒号小写)</div>
+                    <div class="result-value-wrapper" id="md5PlainLowerVal"></div>
+                    <div class="copied-tooltip" id="tip-md5PlainLower">已复制!</div>
+                    <button class="btn-copy" onclick="copyText('md5PlainLowerVal', 'tip-md5PlainLower')" title="复制">
+                        <svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+                    </button>
+                </div>
+
+                <!-- Modulus HEX Upper -->
+                <div class="result-group">
+                    <div class="result-label">公钥模数 Modulus (HEX - 大写)</div>
+                    <div class="result-value-wrapper modulus-box" id="modHexUpperVal"></div>
+                    <div class="copied-tooltip" id="tip-modHexUpper">已复制!</div>
+                    <button class="btn-copy" onclick="copyText('modHexUpperVal', 'tip-modHexUpper')" title="复制">
+                        <svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+                    </button>
+                </div>
+
+                <!-- Modulus HEX Lower -->
+                <div class="result-group">
+                    <div class="result-label">公钥模数 Modulus (HEX - 小写)</div>
+                    <div class="result-value-wrapper modulus-box" id="modHexLowerVal"></div>
+                    <div class="copied-tooltip" id="tip-modHexLower">已复制!</div>
+                    <button class="btn-copy" onclick="copyText('modHexLowerVal', 'tip-modHexLower')" title="复制">
+                        <svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+                    </button>
+                </div>
+
+                <!-- Modulus DEC -->
+                <div class="result-group">
+                    <div class="result-label">公钥模数 Modulus (DEC - 十进制)</div>
+                    <div class="result-value-wrapper modulus-box" id="modDecVal"></div>
+                    <div class="copied-tooltip" id="tip-modDec">已复制!</div>
+                    <button class="btn-copy" onclick="copyText('modDecVal', 'tip-modDec')" title="复制">
+                        <svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <footer>
+            本地文件解析在客户端浏览器完全闭环执行，您的应用数据绝对隐私安全。
+        </footer>
+    </div>
+
+    <script>
+        // DOM bindings
+        const dropzone = document.getElementById('dropzone');
+        const fileInput = document.getElementById('fileInput');
+        const loadingContainer = document.getElementById('loadingContainer');
+        const loadingText = document.getElementById('loadingText');
+        const errorAlert = document.getElementById('errorAlert');
+        const resultsContainer = document.getElementById('resultsContainer');
+
+        // Drag events
+        dropzone.addEventListener('click', () => fileInput.click());
+        dropzone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropzone.classList.add('dragover');
+        });
+        dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
+        dropzone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropzone.classList.remove('dragover');
+            if (e.dataTransfer.files.length > 0) {
+                handleFile(e.dataTransfer.files[0]);
+            }
+        });
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFile(e.target.files[0]);
+            }
+        });
+
+        // Copy Text Util
+        function copyText(elemId, tooltipId) {
+            const text = document.getElementById(elemId).innerText;
+            navigator.clipboard.writeText(text).then(() => {
+                const tooltip = document.getElementById(tooltipId);
+                tooltip.classList.add('show');
+                setTimeout(() => tooltip.classList.remove('show'), 1500);
+            });
+        }
+
+        // File Handler
+        async function handleFile(file) {
+            if (!file.name.endsWith('.apk')) {
+                showError("选择的文件不是有效的 .apk 安装包。");
+                return;
+            }
+
+            hideError();
+            hideResults();
+            showLoading("正在加载 APK 文件结构...");
+
+            try {
+                // 1. Find ZIP Central Directory & read APK Signing Block
+                showLoading("正在搜索 V2/V3 签名块...");
+                const eocd = await findEocd(file);
+                let certDerBytes = null;
+
+                if (eocd) {
+                    const signingBlockBuffer = await readApkSigningBlock(file, eocd.cdOffset);
+                    if (signingBlockBuffer) {
+                        // Check V3 first
+                        let sigBytes = findSignatureSchemeBlock(signingBlockBuffer, 0xf95c387b);
+                        if (sigBytes) {
+                            certDerBytes = parseV2V3Certificate(sigBytes);
+                        }
+                        // Check V2 if V3 not found
+                        if (!certDerBytes) {
+                            sigBytes = findSignatureSchemeBlock(signingBlockBuffer, 0x7109871a);
+                            if (sigBytes) {
+                                certDerBytes = parseV2V3Certificate(sigBytes);
+                            }
+                        }
+                    }
+                }
+
+                // 2. JSZip Fallback for V1
+                let jszipData = null;
+                if (!certDerBytes) {
+                    showLoading("未检测到 V2/V3 签名，正在通过 ZIP 解析 V1 签名...");
+                    const zip = await JSZip.loadAsync(file);
+                    const rsaFile = Object.keys(zip.files).find(name => 
+                        name.startsWith("META-INF/") && 
+                        (name.endsWith(".RSA") || name.endsWith(".DSA") || name.endsWith(".EC") ||
+                         name.endsWith(".rsa") || name.endsWith(".dsa") || name.endsWith(".ec"))
+                    );
+
+                    if (rsaFile) {
+                        const pkcs7Bytes = await zip.files[rsaFile].async("uint8array");
+                        certDerBytes = getCertFromPkcs7(pkcs7Bytes);
+                    }
+                }
+
+                if (!certDerBytes) {
+                    throw new Error("在 APK 中未找到有效的签名证书 (V1, V2 或 V3 签名不存在)。");
+                }
+
+                // 3. Process Certificate details (MD5 & Modulus)
+                showLoading("正在解析证书加密算法，提取公钥模数...");
+                const certInfo = processCertificate(certDerBytes);
+
+                // 4. Parse AndroidManifest.xml package name
+                showLoading("正在读取并分析 AndroidManifest.xml...");
+                const zip = await JSZip.loadAsync(file);
+                const manifestFile = zip.files["AndroidManifest.xml"];
+                if (!manifestFile) {
+                    throw new Error("APK 压缩包中缺失 AndroidManifest.xml 文件。");
+                }
+                const manifestBytes = await manifestFile.async("arraybuffer");
+                const packageName = parseAxmlPackageName(manifestBytes);
+
+                if (!packageName) {
+                    throw new Error("解析 AndroidManifest.xml 包名失败，可能格式已损坏。");
+                }
+
+                // Show results
+                document.getElementById('pkgNameVal').innerText = packageName;
+                document.getElementById('md5Val').innerText = certInfo.md5;
+                document.getElementById('md5SpaceVal').innerText = certInfo.md5Space;
+                document.getElementById('md5PlainLowerVal').innerText = certInfo.md5PlainLower;
+                document.getElementById('modHexUpperVal').innerText = certInfo.modulusHexUpper;
+                document.getElementById('modHexLowerVal').innerText = certInfo.modulusHexLower;
+                document.getElementById('modDecVal').innerText = certInfo.modulusDec;
+
+                hideLoading();
+                showResults();
+
+            } catch (err) {
+                console.error(err);
+                hideLoading();
+                showError(err.message || "解析 APK 时发生未知错误。");
+            }
+        }
+
+        // --- Core Parser Logic in JavaScript ---
+
+        // Helper to convert Uint8Array to Binary String for node-forge
+        function uint8ArrayToBinaryString(uint8Array) {
+            let binary = '';
+            const len = uint8Array.byteLength;
+            for (let i = 0; i < len; i++) {
+                binary += String.fromCharCode(uint8Array[i]);
+            }
+            return binary;
+        }
+
+        // Parse V1 PKCS7 certificates list and return leaf cert DER bytes
+        function getCertFromPkcs7(pkcs7Bytes) {
+            try {
+                const asn1 = forge.asn1.fromDer(uint8ArrayToBinaryString(pkcs7Bytes));
+                const p7 = forge.pkcs7.messageFromAsn1(asn1);
+                if (p7.certificates && p7.certificates.length > 0) {
+                    const cert = p7.certificates[0];
+                    const certDerStr = forge.asn1.toDer(forge.pki.certificateToAsn1(cert)).getBytes();
+                    
+                    const resBytes = new Uint8Array(certDerStr.length);
+                    for (let i = 0; i < certDerStr.length; i++) {
+                        resBytes[i] = certDerStr.charCodeAt(i);
+                    }
+                    return resBytes;
+                }
+            } catch (e) {
+                console.error("PKCS7 parsing error", e);
+            }
+            return null;
+        }
+
+        // Process Certificate DER to calculate MD5 & extract RSA modulus
+        function processCertificate(derBytes) {
+            const derStr = uint8ArrayToBinaryString(derBytes);
+            const asn1 = forge.asn1.fromDer(derStr);
+            const cert = forge.pki.certificateFromAsn1(asn1);
+
+            // Compute MD5 formats
+            const md = forge.md.md5.create();
+            md.update(derStr);
+            const hexMd5 = md.digest().toHex();
+            const md5Formatted = hexMd5.match(/.{2}/g).join(':').toUpperCase();
+            const md5Space = hexMd5.match(/.{2}/g).join(' ').toUpperCase();
+            const md5PlainLower = hexMd5.toLowerCase();
+
+            // Extract RSA modulus
+            if (!cert.publicKey || !cert.publicKey.n) {
+                throw new Error("证书不包含有效的 RSA 公钥，无法提取模数。");
+            }
+
+            const modulusBigInt = cert.publicKey.n;
+            const hexLower = modulusBigInt.toString(16);
+            const hexUpper = hexLower.toUpperCase();
+            const decStr = modulusBigInt.toString(10);
+
+            return {
+                md5: md5Formatted,
+                md5Space: md5Space,
+                md5PlainLower: md5PlainLower,
+                modulusHexUpper: hexUpper,
+                modulusHexLower: hexLower,
+                modulusDec: decStr
+            };
+        }
+
+        // AXML Parser in JavaScript
+        function parseAxmlPackageName(arrayBuffer) {
+            const data = new DataView(arrayBuffer);
+            if (data.byteLength < 8) return null;
+            
+            const magic = data.getUint32(0, true);
+            if (magic !== 0x00080003) return null;
+            
+            let offset = 8;
+            const strings = [];
+            
+            while (offset + 8 <= data.byteLength) {
+                const chunkType = data.getUint32(offset, true);
+                const chunkSize = data.getUint32(offset + 4, true);
+                if (chunkSize < 8 || offset + chunkSize > data.byteLength) return null;
+                
+                if (chunkType === 0x001c0001) {
+                    // String Pool
+                    if (chunkSize < 28) return null;
+                    const stringCount = data.getUint32(offset + 8, true);
+                    const flags = data.getUint32(offset + 16, true);
+                    const stringStart = data.getUint32(offset + 20, true);
+                    
+                    const isUtf8 = (flags & (1 << 8)) !== 0;
+                    const offsets = [];
+                    for (let i = 0; i < stringCount; i++) {
+                        offsets.push(data.getUint32(offset + 28 + i * 4, true));
+                    }
+                    
+                    const poolBytes = new Uint8Array(arrayBuffer, offset + stringStart, chunkSize - stringStart);
+                    
+                    for (let i = 0; i < stringCount; i++) {
+                        const start = offsets[i];
+                        let p = start;
+                        if (isUtf8) {
+                            let u16len = poolBytes[p++];
+                            if (u16len & 0x80) {
+                                u16len = ((u16len & 0x7f) << 8) | poolBytes[p++];
+                            }
+                            let u8len = poolBytes[p++];
+                            if (u8len & 0x80) {
+                                u8len = ((u8len & 0x7f) << 8) | poolBytes[p++];
+                            }
+                            
+                            const strBytes = poolBytes.slice(p, p + u8len);
+                            strings.push(new TextDecoder('utf-8').decode(strBytes));
+                        } else {
+                            let u16len = poolBytes[p] | (poolBytes[p+1] << 8);
+                            p += 2;
+                            if (u16len & 0x8000) {
+                                const next = poolBytes[p] | (poolBytes[p+1] << 8);
+                                p += 2;
+                                u16len = ((u16len & 0x7fff) << 16) | next;
+                            }
+                            
+                            const strBytes = poolBytes.slice(p, p + u16len * 2);
+                            strings.push(new TextDecoder('utf-16le').decode(strBytes));
+                        }
+                    }
+                } else if (chunkType === 0x00100102) {
+                    // Start Element Chunk
+                    if (offset + 36 > data.byteLength) return null;
+                    const nameIdx = data.getUint32(offset + 20, true);
+                    if (nameIdx < strings.length && strings[nameIdx] === "manifest") {
+                        const attrStart = data.getUint16(offset + 24, true);
+                        const attrSize = data.getUint16(offset + 26, true);
+                        const attrCount = data.getUint16(offset + 28, true);
+                        const headerSize = data.getUint16(offset + 2, true);
+                        
+                        let attrOffset = offset + headerSize + attrStart;
+                        for (let i = 0; i < attrCount; i++) {
+                            if (attrOffset + 20 > offset + chunkSize) break;
+                            
+                            const attrNameIdx = data.getUint32(attrOffset + 4, true);
+                            const attrValIdx = data.getUint32(attrOffset + 8, true);
+                            
+                            if (attrNameIdx < strings.length && strings[attrNameIdx] === "package") {
+                                if (attrValIdx < strings.length) {
+                                    return strings[attrValIdx];
+                                }
+                            }
+                            attrOffset += attrSize;
+                        }
+                    }
+                }
+                offset += chunkSize;
+            }
+            return null;
+        }
+
+        // Find EOCD offset & Central Directory offset
+        async function findEocd(file) {
+            const size = file.size;
+            const searchSize = Math.min(size, 65536 + 22);
+            const blob = file.slice(size - searchSize, size);
+            const buffer = await blob.arrayBuffer();
+            const data = new DataView(buffer);
+            
+            for (let i = searchSize - 22; i >= 0; i--) {
+                if (data.getUint32(i, true) === 0x06054b50) {
+                    const cdSize = data.getUint32(i + 12, true);
+                    const cdOffset = data.getUint32(i + 16, true);
+                    return { cdOffset, cdSize };
+                }
+            }
+            return null;
+        }
+
+        // Read APK Signing Block
+        async function readApkSigningBlock(file, cdOffset) {
+            if (cdOffset < 24) return null;
+            
+            let blob = file.slice(cdOffset - 24, cdOffset);
+            let buffer = await blob.arrayBuffer();
+            let data = new DataView(buffer);
+            
+            const magic = "APK Sig Block 42";
+            const magicBytes = new Uint8Array(buffer, 8, 16);
+            const magicStr = String.fromCharCode.apply(null, magicBytes);
+            if (magicStr !== magic) return null;
+            
+            const sizeLow = data.getUint32(0, true);
+            const sizeHigh = data.getUint32(4, true);
+            const blockSize = sizeLow + sizeHigh * 0x100000000;
+            
+            if (cdOffset < blockSize + 8) return null;
+            
+            const startOffset = cdOffset - blockSize - 8;
+            blob = file.slice(startOffset, startOffset + 8);
+            buffer = await blob.arrayBuffer();
+            data = new DataView(buffer);
+            
+            const sizeLowStart = data.getUint32(0, true);
+            const sizeHighStart = data.getUint32(4, true);
+            const sizeStart = sizeLowStart + sizeHighStart * 0x100000000;
+            
+            if (sizeStart !== blockSize) return null;
+            
+            const dataSize = blockSize - 16;
+            blob = file.slice(startOffset + 8, startOffset + 8 + dataSize);
+            return await blob.arrayBuffer();
+        }
+
+        // Locate block by ID inside Signing Block
+        function findSignatureSchemeBlock(arrayBuffer, targetId) {
+            const data = new DataView(arrayBuffer);
+            let offset = 0;
+            while (offset + 12 <= data.byteLength) {
+                const sizeLow = data.getUint32(offset, true);
+                const sizeHigh = data.getUint32(offset + 4, true);
+                const valSize = sizeLow + sizeHigh * 0x100000000;
+                
+                const id = data.getUint32(offset + 8, true);
+                
+                if (offset + 8 + valSize > data.byteLength) break;
+                
+                if (id === targetId) {
+                    return new Uint8Array(arrayBuffer, offset + 12, valSize - 4);
+                }
+                offset += 8 + valSize;
+            }
+            return null;
+        }
+
+        // Length-prefixed buffer reader helper
+        function readLengthPrefixed(view, state) {
+            if (state.offset + 4 > view.byteLength) return null;
+            const len = view.getUint32(state.offset, true);
+            state.offset += 4;
+            if (state.offset + len > view.byteLength) return null;
+            const res = new Uint8Array(view.buffer, view.byteOffset + state.offset, len);
+            state.offset += len;
+            return res;
+        }
+
+        // Parse leaf certificate DER bytes from V2/V3 block
+        function parseV2V3Certificate(uint8Array) {
+            const view = new DataView(uint8Array.buffer, uint8Array.byteOffset, uint8Array.byteLength);
+            const state = { offset: 0 };
+            
+            const signersBytes = readLengthPrefixed(view, state);
+            if (!signersBytes) return null;
+            
+            const signersView = new DataView(signersBytes.buffer, signersBytes.byteOffset, signersBytes.byteLength);
+            const signersState = { offset: 0 };
+            
+            const signerBytes = readLengthPrefixed(signersView, signersState);
+            if (!signerBytes) return null;
+            
+            const signerView = new DataView(signerBytes.buffer, signerBytes.byteOffset, signerBytes.byteLength);
+            const signerState = { offset: 0 };
+            
+            const signedDataBytes = readLengthPrefixed(signerView, signerState);
+            if (!signedDataBytes) return null;
+            
+            const sdView = new DataView(signedDataBytes.buffer, signedDataBytes.byteOffset, signedDataBytes.byteLength);
+            const sdState = { offset: 0 };
+            
+            const digestsBytes = readLengthPrefixed(sdView, sdState);
+            if (!digestsBytes) return null;
+            
+            const certsBytes = readLengthPrefixed(sdView, sdState);
+            if (!certsBytes) return null;
+            
+            const certsView = new DataView(certsBytes.buffer, certsBytes.byteOffset, certsBytes.byteLength);
+            const certsState = { offset: 0 };
+            
+            return readLengthPrefixed(certsView, certsState);
+        }
+
+        // Display utility helpers
+        function showLoading(text) {
+            loadingText.innerText = text;
+            loadingContainer.style.display = 'flex';
+        }
+        function hideLoading() {
+            loadingContainer.style.display = 'none';
+        }
+        function showError(msg) {
+            errorAlert.innerText = msg;
+            errorAlert.style.display = 'block';
+        }
+        function hideError() {
+            errorAlert.style.display = 'none';
+        }
+        function showResults() {
+            resultsContainer.style.display = 'block';
+        }
+        function hideResults() {
+            resultsContainer.style.display = 'none';
+        }
+    </script>
+</body>
+</html>

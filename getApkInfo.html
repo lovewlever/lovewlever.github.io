@@ -385,6 +385,65 @@
             color: var(--text-primary);
             box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
         }
+        .btn-calc {
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            border: none;
+            color: var(--text-primary);
+            padding: 4px 12px;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 8px rgba(99, 102, 241, 0.2);
+            font-family: 'Outfit', sans-serif;
+        }
+        .btn-calc:hover {
+            transform: scale(1.05);
+            box-shadow: 0 2px 12px rgba(99, 102, 241, 0.4);
+        }
+        .btn-calc:active {
+            transform: scale(0.95);
+        }
+        .btn-calc:disabled {
+            background: rgba(255, 255, 255, 0.1);
+            color: var(--text-secondary);
+            cursor: not-allowed;
+            box-shadow: none;
+            transform: none;
+        }
+        .main-tabs {
+            display: flex;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 6px;
+            border-radius: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            margin-bottom: 2rem;
+            max-width: 420px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        .main-tab {
+            flex: 1;
+            text-align: center;
+            padding: 0.8rem 1.2rem;
+            border-radius: 12px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            user-select: none;
+        }
+        .main-tab:hover {
+            color: var(--text-primary);
+            background: rgba(255, 255, 255, 0.02);
+        }
+        .main-tab.active {
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            color: var(--text-primary);
+            box-shadow: 0 4px 20px rgba(99, 102, 241, 0.4);
+        }
     </style>
 </head>
 <body>
@@ -392,110 +451,188 @@
     <div class="container">
         <header>
             <h1>Android APK 属性提取工具</h1>
-            <p>100% 浏览器本地解析包名、签名 MD5 和公钥模数</p>
+            <p>100% 浏览器本地解析，安全快捷且无需上传服务器</p>
         </header>
 
-        <div class="card">
-            <!-- Dropzone Area -->
-            <div class="dropzone" id="dropzone">
-                <input type="file" id="fileInput" accept=".apk">
-                <span class="dropzone-icon">📥</span>
-                <h3>拖拽 APK 文件到此处</h3>
-                <p>或者点击区域选择本地文件进行解析</p>
+        <!-- Main Tabs -->
+        <div class="main-tabs">
+            <div class="main-tab active" onclick="switchMainTab('apk')">APK 属性提取</div>
+            <div class="main-tab" onclick="switchMainTab('md5')">MD5 计算</div>
+        </div>
+
+        <!-- APK Parser Panel -->
+        <div id="apkPanel">
+            <div class="card">
+                <!-- Dropzone Area -->
+                <div class="dropzone" id="dropzone">
+                    <input type="file" id="fileInput" accept=".apk">
+                    <span class="dropzone-icon">📥</span>
+                    <h3>拖拽 APK 文件到此处</h3>
+                    <p>或者点击区域选择本地文件进行解析</p>
+                </div>
+
+                <!-- Loading Spinner Area -->
+                <div class="loading-container" id="loadingContainer">
+                    <div class="spinner"></div>
+                    <div class="loading-text" id="loadingText">正在读取 APK 文件结构...</div>
+                </div>
+
+                <!-- Error Notification -->
+                <div class="error-alert" id="errorAlert">
+                    解析失败，请确保您上传的是有效的 Android APK 安装包文件。
+                </div>
             </div>
 
-            <!-- Loading Spinner Area -->
-            <div class="loading-container" id="loadingContainer">
-                <div class="spinner"></div>
-                <div class="loading-text" id="loadingText">正在读取 APK 文件结构...</div>
-            </div>
+            <!-- Output Area -->
+            <div class="results-container" id="resultsContainer">
+                <div class="card">
+                    <h2 style="font-size: 1.25rem; font-weight: 600; margin-bottom: 1.5rem; color: #a5b4fc; display: flex; align-items: center; gap: 8px;">
+                        📊 提取属性结果
+                    </h2>
 
-            <!-- Error Notification -->
-            <div class="error-alert" id="errorAlert">
-                解析失败，请确保您上传的是有效的 Android APK 安装包文件。
+                    <!-- Package Name -->
+                    <div class="result-group">
+                        <div class="result-label">应用包名 (Package Name)</div>
+                        <div class="result-value-wrapper" id="pkgNameVal"></div>
+                        <div class="copied-tooltip" id="tip-pkg">已复制!</div>
+                        <button class="btn-copy" onclick="copyText('pkgNameVal', 'tip-pkg')" title="复制">
+                            <svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+                        </button>
+                    </div>
+
+                    <!-- APK File MD5 -->
+                    <div class="result-group">
+                        <div class="result-label">
+                            <span>APK 文件 MD5 (File MD5)</span>
+                            <button class="btn-calc" id="btnCalcMd5" onclick="triggerMd5Calc()">点击计算</button>
+                        </div>
+                        <div class="result-value-wrapper" id="apkMd5Val" style="color: var(--text-secondary);">点击右侧 “点击计算” 按钮进行计算</div>
+                        <div class="copied-tooltip" id="tip-apkMd5">已复制!</div>
+                        <button class="btn-copy" id="btnCopyApkMd5" onclick="copyText('apkMd5Val', 'tip-apkMd5')" title="复制" style="display: none;">
+                            <svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+                        </button>
+                    </div>
+
+                    <!-- Format Toggle Tabs -->
+                    <div class="format-tabs" id="formatTabs">
+                        <div class="format-tab active" data-format="colon">标准冒号 (Colons)</div>
+                        <div class="format-tab" data-format="space">空格分隔 (Spaces)</div>
+                        <div class="format-tab" data-format="plain">无冒号小写 (Plain)</div>
+                    </div>
+
+                    <!-- Signature MD5 -->
+                    <div class="result-group">
+                        <div class="result-label">证书 MD5</div>
+                        <div class="result-value-wrapper" id="md5Val"></div>
+                        <div class="copied-tooltip" id="tip-md5">已复制!</div>
+                        <button class="btn-copy" onclick="copyText('md5Val', 'tip-md5')" title="复制">
+                            <svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+                        </button>
+                    </div>
+
+                    <!-- Signature SHA1 -->
+                    <div class="result-group">
+                        <div class="result-label">证书 SHA1</div>
+                        <div class="result-value-wrapper" id="sha1Val"></div>
+                        <div class="copied-tooltip" id="tip-sha1">已复制!</div>
+                        <button class="btn-copy" onclick="copyText('sha1Val', 'tip-sha1')" title="复制">
+                            <svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+                        </button>
+                    </div>
+
+                    <!-- Signature SHA256 -->
+                    <div class="result-group">
+                        <div class="result-label">证书 SHA256</div>
+                        <div class="result-value-wrapper" id="sha256Val"></div>
+                        <div class="copied-tooltip" id="tip-sha256">已复制!</div>
+                        <button class="btn-copy" onclick="copyText('sha256Val', 'tip-sha256')" title="复制">
+                            <svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+                        </button>
+                    </div>
+
+                    <!-- Modulus HEX Upper -->
+                    <div class="result-group">
+                        <div class="result-label">公钥模数 Modulus (HEX - 大写)</div>
+                        <div class="result-value-wrapper modulus-box" id="modHexUpperVal"></div>
+                        <div class="copied-tooltip" id="tip-modHexUpper">已复制!</div>
+                        <button class="btn-copy" onclick="copyText('modHexUpperVal', 'tip-modHexUpper')" title="复制">
+                            <svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+                        </button>
+                    </div>
+
+                    <!-- Modulus HEX Lower -->
+                    <div class="result-group">
+                        <div class="result-label">公钥模数 Modulus (HEX - 小写)</div>
+                        <div class="result-value-wrapper modulus-box" id="modHexLowerVal"></div>
+                        <div class="copied-tooltip" id="tip-modHexLower">已复制!</div>
+                        <button class="btn-copy" onclick="copyText('modHexLowerVal', 'tip-modHexLower')" title="复制">
+                            <svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+                        </button>
+                    </div>
+
+                    <!-- Modulus DEC -->
+                    <div class="result-group">
+                        <div class="result-label">公钥模数 Modulus (DEC - 十进制)</div>
+                        <div class="result-value-wrapper modulus-box" id="modDecVal"></div>
+                        <div class="copied-tooltip" id="tip-modDec">已复制!</div>
+                        <button class="btn-copy" onclick="copyText('modDecVal', 'tip-modDec')" title="复制">
+                            <svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
 
-        <!-- Output Area -->
-        <div class="results-container" id="resultsContainer">
-            <div class="card">
-                <h2 style="font-size: 1.25rem; font-weight: 600; margin-bottom: 1.5rem; color: #a5b4fc; display: flex; align-items: center; gap: 8px;">
-                    📊 提取属性结果
+        <!-- General File MD5 Panel -->
+        <div class="card" id="md5Panel" style="display: none;">
+            <!-- Dropzone Area for General Files -->
+            <div class="dropzone" id="dropzoneGeneral">
+                <input type="file" id="fileInputGeneral">
+                <span class="dropzone-icon">📄</span>
+                <h3>拖拽任意文件到此处</h3>
+                <p>或者点击区域选择本地文件进行 MD5 计算</p>
+            </div>
+
+            <!-- Loading/Progress Area for General Files -->
+            <div class="loading-container" id="loadingContainerGeneral">
+                <div class="spinner"></div>
+                <div class="loading-text" id="loadingTextGeneral">正在读取文件...</div>
+            </div>
+
+            <!-- Results for General Files -->
+            <div class="results-container" id="resultsContainerGeneral" style="margin-top: 2rem;">
+                <h2 style="font-size: 1.25rem; font-weight: 600; margin-bottom: 1.5rem; color: #67e8f9; display: flex; align-items: center; gap: 8px;">
+                    📊 计算结果
                 </h2>
-
-                <!-- Package Name -->
+                
+                <!-- File Name -->
                 <div class="result-group">
-                    <div class="result-label">应用包名 (Package Name)</div>
-                    <div class="result-value-wrapper" id="pkgNameVal"></div>
-                    <div class="copied-tooltip" id="tip-pkg">已复制!</div>
-                    <button class="btn-copy" onclick="copyText('pkgNameVal', 'tip-pkg')" title="复制">
+                    <div class="result-label">文件名 (File Name)</div>
+                    <div class="result-value-wrapper" id="fileNameGeneral" style="font-family: inherit;"></div>
+                </div>
+
+                <!-- File Size -->
+                <div class="result-group">
+                    <div class="result-label">文件大小 (File Size)</div>
+                    <div class="result-value-wrapper" id="fileSizeGeneral" style="font-family: inherit;"></div>
+                </div>
+
+                <!-- File MD5 (Hex Upper) -->
+                <div class="result-group">
+                    <div class="result-label">文件 MD5 (大写)</div>
+                    <div class="result-value-wrapper" id="fileMd5UpperGeneral"></div>
+                    <div class="copied-tooltip" id="tip-fileMd5Upper">已复制!</div>
+                    <button class="btn-copy" onclick="copyText('fileMd5UpperGeneral', 'tip-fileMd5Upper')" title="复制">
                         <svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
                     </button>
                 </div>
 
-                <!-- Format Toggle Tabs -->
-                <div class="format-tabs" id="formatTabs">
-                    <div class="format-tab active" data-format="colon">标准冒号 (Colons)</div>
-                    <div class="format-tab" data-format="space">空格分隔 (Spaces)</div>
-                    <div class="format-tab" data-format="plain">无冒号小写 (Plain)</div>
-                </div>
-
-                <!-- Signature MD5 -->
+                <!-- File MD5 (Hex Lower) -->
                 <div class="result-group">
-                    <div class="result-label">证书 MD5</div>
-                    <div class="result-value-wrapper" id="md5Val"></div>
-                    <div class="copied-tooltip" id="tip-md5">已复制!</div>
-                    <button class="btn-copy" onclick="copyText('md5Val', 'tip-md5')" title="复制">
-                        <svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
-                    </button>
-                </div>
-
-                <!-- Signature SHA1 -->
-                <div class="result-group">
-                    <div class="result-label">证书 SHA1</div>
-                    <div class="result-value-wrapper" id="sha1Val"></div>
-                    <div class="copied-tooltip" id="tip-sha1">已复制!</div>
-                    <button class="btn-copy" onclick="copyText('sha1Val', 'tip-sha1')" title="复制">
-                        <svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
-                    </button>
-                </div>
-
-                <!-- Signature SHA256 -->
-                <div class="result-group">
-                    <div class="result-label">证书 SHA256</div>
-                    <div class="result-value-wrapper" id="sha256Val"></div>
-                    <div class="copied-tooltip" id="tip-sha256">已复制!</div>
-                    <button class="btn-copy" onclick="copyText('sha256Val', 'tip-sha256')" title="复制">
-                        <svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
-                    </button>
-                </div>
-
-                <!-- Modulus HEX Upper -->
-                <div class="result-group">
-                    <div class="result-label">公钥模数 Modulus (HEX - 大写)</div>
-                    <div class="result-value-wrapper modulus-box" id="modHexUpperVal"></div>
-                    <div class="copied-tooltip" id="tip-modHexUpper">已复制!</div>
-                    <button class="btn-copy" onclick="copyText('modHexUpperVal', 'tip-modHexUpper')" title="复制">
-                        <svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
-                    </button>
-                </div>
-
-                <!-- Modulus HEX Lower -->
-                <div class="result-group">
-                    <div class="result-label">公钥模数 Modulus (HEX - 小写)</div>
-                    <div class="result-value-wrapper modulus-box" id="modHexLowerVal"></div>
-                    <div class="copied-tooltip" id="tip-modHexLower">已复制!</div>
-                    <button class="btn-copy" onclick="copyText('modHexLowerVal', 'tip-modHexLower')" title="复制">
-                        <svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
-                    </button>
-                </div>
-
-                <!-- Modulus DEC -->
-                <div class="result-group">
-                    <div class="result-label">公钥模数 Modulus (DEC - 十进制)</div>
-                    <div class="result-value-wrapper modulus-box" id="modDecVal"></div>
-                    <div class="copied-tooltip" id="tip-modDec">已复制!</div>
-                    <button class="btn-copy" onclick="copyText('modDecVal', 'tip-modDec')" title="复制">
+                    <div class="result-label">文件 MD5 (小写)</div>
+                    <div class="result-value-wrapper" id="fileMd5LowerGeneral"></div>
+                    <div class="copied-tooltip" id="tip-fileMd5Lower">已复制!</div>
+                    <button class="btn-copy" onclick="copyText('fileMd5LowerGeneral', 'tip-fileMd5Lower')" title="复制">
                         <svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
                     </button>
                 </div>
@@ -508,7 +645,35 @@
     </div>
 
     <script>
-        // DOM bindings
+        // Tab Switcher
+        function switchMainTab(tab) {
+            const apkPanel = document.getElementById('apkPanel');
+            const md5Panel = document.getElementById('md5Panel');
+            const tabs = document.querySelectorAll('.main-tab');
+            
+            tabs.forEach(t => t.classList.remove('active'));
+            
+            if (tab === 'apk') {
+                document.querySelector('.main-tab[onclick="switchMainTab(\'apk\')"]').classList.add('active');
+                apkPanel.style.display = 'block';
+                md5Panel.style.display = 'none';
+            } else {
+                document.querySelector('.main-tab[onclick="switchMainTab(\'md5\')"]').classList.add('active');
+                apkPanel.style.display = 'none';
+                md5Panel.style.display = 'block';
+            }
+        }
+
+        // File size formatter helper
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i] + ` (${bytes.toLocaleString()} 字节)`;
+        }
+
+        // DOM bindings (APK)
         const dropzone = document.getElementById('dropzone');
         const fileInput = document.getElementById('fileInput');
         const loadingContainer = document.getElementById('loadingContainer');
@@ -516,7 +681,7 @@
         const errorAlert = document.getElementById('errorAlert');
         const resultsContainer = document.getElementById('resultsContainer');
 
-        // Drag events
+        // Drag events (APK)
         dropzone.addEventListener('click', () => fileInput.click());
         dropzone.addEventListener('dragover', (e) => {
             e.preventDefault();
@@ -536,6 +701,58 @@
             }
         });
 
+        // DOM bindings & events (General File MD5)
+        const dropzoneGen = document.getElementById('dropzoneGeneral');
+        const fileInputGen = document.getElementById('fileInputGeneral');
+
+        dropzoneGen.addEventListener('click', () => fileInputGen.click());
+        dropzoneGen.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropzoneGen.classList.add('dragover');
+        });
+        dropzoneGen.addEventListener('dragleave', () => dropzoneGen.classList.remove('dragover'));
+        dropzoneGen.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropzoneGen.classList.remove('dragover');
+            if (e.dataTransfer.files.length > 0) {
+                handleGeneralFile(e.dataTransfer.files[0]);
+            }
+        });
+        fileInputGen.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleGeneralFile(e.target.files[0]);
+            }
+        });
+
+        // General File MD5 Handler
+        async function handleGeneralFile(file) {
+            const loadingContainerGen = document.getElementById('loadingContainerGeneral');
+            const loadingTextGen = document.getElementById('loadingTextGeneral');
+            const resultsContainerGen = document.getElementById('resultsContainerGeneral');
+            
+            resultsContainerGen.style.display = 'none';
+            loadingContainerGen.style.display = 'flex';
+            loadingTextGen.innerText = "正在准备计算 MD5 (0%)...";
+
+            try {
+                const md5 = await calculateFileMd5(file, (percent) => {
+                    loadingTextGen.innerText = `正在计算 MD5 (${percent}%)...`;
+                });
+
+                document.getElementById('fileNameGeneral').innerText = file.name;
+                document.getElementById('fileSizeGeneral').innerText = formatFileSize(file.size);
+                document.getElementById('fileMd5UpperGeneral').innerText = md5.toUpperCase();
+                document.getElementById('fileMd5LowerGeneral').innerText = md5.toLowerCase();
+
+                loadingContainerGen.style.display = 'none';
+                resultsContainerGen.style.display = 'block';
+            } catch (err) {
+                console.error(err);
+                loadingContainerGen.style.display = 'none';
+                alert("计算 MD5 失败: " + err.message);
+            }
+        }
+
         // Copy Text Util
         function copyText(elemId, tooltipId) {
             const text = document.getElementById(elemId).innerText;
@@ -544,6 +761,59 @@
                 tooltip.classList.add('show');
                 setTimeout(() => tooltip.classList.remove('show'), 1500);
             });
+        }
+
+        // Calculate APK File MD5 in chunks to keep UI responsive
+        async function calculateFileMd5(file, onProgress) {
+            const chunkSize = 2 * 1024 * 1024; // 2MB chunks
+            const chunks = Math.ceil(file.size / chunkSize);
+            const md = forge.md.md5.create();
+            
+            for (let i = 0; i < chunks; i++) {
+                const start = i * chunkSize;
+                const end = Math.min(start + chunkSize, file.size);
+                const blob = file.slice(start, end);
+                const buffer = await blob.arrayBuffer();
+                const uint8 = new Uint8Array(buffer);
+                const binary = uint8ArrayToBinaryString(uint8);
+                md.update(binary);
+                
+                if (onProgress) {
+                    onProgress(Math.round(((i + 1) / chunks) * 100));
+                }
+            }
+            return md.digest().toHex();
+        }
+
+        // Trigger MD5 calculation when user clicks the button
+        async function triggerMd5Calc() {
+            const file = window.currentFile;
+            if (!file) return;
+
+            const btnCalc = document.getElementById('btnCalcMd5');
+            const apkMd5Val = document.getElementById('apkMd5Val');
+            const btnCopyApkMd5 = document.getElementById('btnCopyApkMd5');
+
+            btnCalc.disabled = true;
+            btnCalc.innerText = '计算中 0%...';
+            apkMd5Val.style.color = '#cbd5e1';
+            apkMd5Val.innerText = '正在计算文件 MD5，请稍候...';
+
+            try {
+                const apkMd5 = await calculateFileMd5(file, (percent) => {
+                    btnCalc.innerText = `计算中 ${percent}%...`;
+                });
+                apkMd5Val.innerText = apkMd5;
+                btnCalc.innerText = '已计算';
+                btnCalc.style.display = 'none';
+                btnCopyApkMd5.style.display = 'flex';
+            } catch (err) {
+                console.error(err);
+                apkMd5Val.style.color = 'var(--text-secondary)';
+                apkMd5Val.innerText = '计算 MD5 失败: ' + err.message;
+                btnCalc.disabled = false;
+                btnCalc.innerText = '重试';
+            }
         }
 
         // File Handler
@@ -558,6 +828,21 @@
             showLoading("正在加载 APK 文件结构...");
 
             try {
+                // Save file globally for manual MD5 calculation
+                window.currentFile = file;
+
+                // Reset MD5 UI state
+                const btnCalc = document.getElementById('btnCalcMd5');
+                btnCalc.disabled = false;
+                btnCalc.innerText = '点击计算';
+                btnCalc.style.display = 'inline-block';
+                
+                const apkMd5Val = document.getElementById('apkMd5Val');
+                apkMd5Val.style.color = 'var(--text-secondary)';
+                apkMd5Val.innerText = '点击右侧 “点击计算” 按钮进行计算';
+                
+                document.getElementById('btnCopyApkMd5').style.display = 'none';
+
                 // 1. Find ZIP Central Directory & read APK Signing Block
                 showLoading("正在搜索 V2/V3 签名块...");
                 const eocd = await findEocd(file);
